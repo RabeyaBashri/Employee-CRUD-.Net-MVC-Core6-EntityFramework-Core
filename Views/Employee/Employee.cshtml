@@ -1,0 +1,390 @@
+﻿@{
+    ViewData["Title"] = "Employee";
+}
+
+<h3>Manage Employee</h3>
+
+<link rel="stylesheet" type="text/css" href="lib/datatables/datatables.css">
+<link rel="stylesheet" type="text/css" href="lib/datatables/Editor/css/editor.dataTables.min.css">
+<link rel="stylesheet" type="text/css" href="lib/datatables/Buttons-2.2.3/css/buttons.dataTables.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+
+@section Scripts {
+  
+ <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.8.4/moment.min.js"></script>
+ <script type="text/javascript" charset="utf8" src="lib/datatables/datatables.js"></script>
+ <script type="text/javascript" charset="utf8" src="lib/dataTables/Editor/js/dataTables.editor.js"></script>
+ <script type="text/javascript" charset="utf8" src="lib/dataTables/Buttons-2.2.3/js/buttons.dataTables.js"></script>
+ <script type="text/javascript" src="https://cdn.datatables.net/plug-ins/1.10.16/sorting/datetime-moment.js"></script>
+ <script type="text/javascript" src="https://cdn.datatables.net/plug-ins/1.10.21/dataRender/datetime.js"></script>
+  
+    <script type="text/javascript">
+       
+        $(document).ready(function() {
+            loadDepartments();
+        });
+
+        var loadDepartments = function() {
+            
+           $.ajax({
+                 
+                url: '/Employee/GetDepartments',
+                type: "GET",
+                dataType:"json",
+                
+                success: function (responseData) {
+                   
+                    if (responseData != undefined) {
+                        if (responseData.returnStatus == "OK" && responseData.data != undefined && responseData.data != "") {
+                            var rows = JSON.parse(responseData.data);
+
+                            if (rows != null && rows.length > 0) {
+                                var options = '';
+                                for (var i = 0; i < rows.length; i++) {
+                                    options += '<option value="' + rows[i].Id + '">' + rows[i].Name + '</option>';
+                                }
+                                $('#ddlDepartments').append(options);
+                                $('#divDepartments').show();
+                                bindDdlDepartmentsOnChange();
+                            }
+                        }
+                    }
+                    
+                },
+                error: function (err) {
+                    alert(err.statusText);
+                }
+
+            });
+        }
+
+        var bindDdlDepartmentsOnChange = function()
+        {
+            $('#ddlDepartments').on("change", function () {
+                    var deptId = $(this).val();
+                    if (deptId !== "") {
+                        generateEmployeeDataTable(deptId);
+                    }
+                    else {
+                        $('#divTblEmployees').hide();
+                    }
+            });
+        }
+
+        var generateEmployeeDataTable = function(departmentID)
+        {
+             $.ajax({
+                 
+                url: '/Employee/GetEmployeesByDepartment?departmentID='+departmentID,
+                type: "GET",
+                dataType:"json",
+                success: function (responseData) {
+                   
+                    if (responseData != undefined) {
+                        if (responseData.returnStatus == "OK" && responseData.data != undefined && responseData.data != "") {
+                          
+                            var rows =  JSON.parse(responseData.data);
+
+                            if (rows != null && rows.length > 0) {
+                                loadTblEmployees(rows);
+                            }
+                        }
+                    }
+                    
+                },
+                error: function (err) {
+                    alert(err.statusText);
+                }
+
+            });
+        }
+
+        var tableObj;
+       
+        var loadTblEmployees = function(employess) {
+               
+            var tableId = "#tblEmployee";
+
+                if (tableObj != null) {
+                    tableObj.clear();
+                    tableObj.destroy();
+                }
+
+                $(tableId + " tbody").empty();
+                $(tableId + " thead").empty();
+
+                tableObj = $("#tblEmployee").DataTable({
+                    "dom": "Bfrtip",
+                    "processing": true,
+                    "filter": true,
+                    "orderMulti": false,
+                    "pageLength": 5,
+                    "data": employess,
+                    "columns": [
+                        { 'data': "Id" },
+                        { 'data': "Name", 'title': "Name"},
+                        { "data": "HiredOn", 'title': "Hired on"},
+                        { "data": "Dob", 'title': "Date of birth" },
+                        { "data": "Email" , 'title': "Email"},
+                        { "data": "ContactNo" , 'title': "Contack No"},
+                        { "data": "Address" , 'title': "Address"},
+                        { "data": "Position" , 'title': "Designation"},
+                        { "data": null,"className": "dt-center editor-delete",
+                                  'defaultContent': "<i class='fa fa-trash'/>",
+                                  "orderable": false}
+                    ]
+                    ,
+                     "columnDefs": [
+                        {
+                            "targets": [0],
+                            "visible": false
+                        },
+                        {
+                             "targets": [2,3],
+                             "render": function (value) {
+                                              if (value === null) { return ""; }
+                                              return moment(value).format('DD/MM/YYYY');
+                                       }
+                            
+                        }
+                    ],
+                    buttons: [
+                        {   extend: "create",
+                            text: "New",
+                            action: function (e, dt, node, config) {
+                                editor.create( {
+                                        title: 'Add new record',
+                                        buttons: 'Save'
+                                });
+                            }
+                        }
+                    ]
+                });
+
+                $('#divTblEmployees').show();
+               
+                loadEditor();
+        }
+       
+        var editor,empObjIdToUpdate,cellToUpdate,cellValueToUpdate,empObj;
+        
+        var loadEditor = function()
+        {
+            editor = new $.fn.dataTable.Editor({
+                    ajax: {
+                        create: {
+                    
+                            type: 'POST',
+                            url: '/Employee/Create',
+                            dataType: "json",
+                            data: { 
+                                  "empObjStr": function(){return JSON.stringify(empObj); }
+                                   },
+                            success: function (response) {
+                               addRow(response);
+                            }
+                        },
+                        edit: {
+                            type: 'PUT',
+                            url: '/Employee/Put',
+                            dataType: "json",
+                            data: { 
+                                  "empObjIdToUpdate": function(){return empObjIdToUpdate; },
+                                  "cellToUpdate" : function(){return cellToUpdate;},
+                                  "cellValueToUpdate" : function(){return cellValueToUpdate;}
+                            },
+                            success: function (response) {
+                                updateCell(response);
+                            }
+                        },
+                        remove: {
+                    
+                            type: 'DELETE',
+                            url: '/Employee/Delete',
+                            dataType: "json",
+                            data: { 
+                                  "empObjIdToUpdate": function(){return empObjIdToUpdate; }
+                                   },
+                            success: function (response) {
+                            }
+                        }
+                    },
+                    table: "#tblEmployee",
+                    idSrc: 'Id',
+                    fields: [   {
+                                    label: "Name",
+                                    name: "Name"
+                                },
+                                {
+                                    label: "Email",
+                                    name: "Email"
+                                }, 
+                                {
+                                    label: "Address",
+                                    name: "Address"
+                                }, 
+                                {
+                                    label: "Hired on",
+                                    name: "HiredOn",
+                                    type:      'datetime',
+                                    def:       function () { return new Date(); },
+                                    format:    'YYYY-MM-DD'
+                                }, 
+                                {
+                                    label: "DOB",
+                                    name: "Dob",
+                                    type:      'datetime',
+                                    def:       function () { return new Date(); },
+                                    format:    'YYYY-MM-DD'
+                                }, 
+                                {
+                                    label: "Position",
+                                    name: "Position"
+                                }, 
+                                {
+                                    label: "ContactNo",
+                                    name: "ContactNo"
+                                }
+                    ],
+                    formOptions: {
+                        inline: {
+                            submit: 'changed'
+                        }
+                    }
+           });
+
+            $('#tblEmployee').on('click', 'tbody tr td', function(e) {
+                   
+                   editor.inline(this, {
+                       onBlur: 'submit'
+                   });
+          
+           });
+
+            $('#tblEmployee tbody').on( 'click', 'td.editor-delete', function () {
+                editor
+                    .title('Delete row')
+                    .message('Are you sure you wish to delete this row?')
+                    .buttons({
+                        "label": "Delete", "fn": function() {
+                            editor.submit();
+                        }
+                    })
+                    .remove( $(this).closest('tr') );
+            });
+
+            editor.on('preSubmit', function (e, data, action) {
+                switch (action) {
+                    case 'create':
+                                 {
+                                     empObj = data.data[0];
+                                     empObj.departmentID = $('#ddlDepartments').val();
+                                 }
+                        break;
+                    case 'edit': 
+                                 { 
+                                    $.each(data.data, function(key, values) {
+
+                                        empObjIdToUpdate = key;
+
+                                        $.each(values, function(keyProperty, valuesProperty) {
+
+                                            cellToUpdate = keyProperty;
+                                            cellValueToUpdate = valuesProperty;
+                                        });
+                                    });
+                                 }
+                        break;
+                    case 'delete':
+                                 $.each(data.data, function(key, values) {
+                                        empObjIdToUpdate = key;
+                                 });
+                        break;
+
+                }
+                
+           });
+        }
+        
+        var updateCell = function(response) {
+
+            if (response != undefined && response.returnStatus == 'OK' && empObjIdToUpdate != undefined && cellToUpdate != undefined  && cellValueToUpdate != undefined) {
+
+                var table = $('#tblEmployee').DataTable();
+                var cols = table.settings().init().columns;
+
+                $('#tblEmployee tbody tr').each(function() {
+
+                    var currentRow = $(this);
+                    var rowObjId = table.row(currentRow).data().Id;
+                       
+                    if (rowObjId == empObjIdToUpdate) {
+                        
+                        var rowToUpdate = table.row(currentRow);
+
+                        currentRow.find('td').each(function() {
+                           
+                            var colIndex = table.cell(this).index().column;
+                            var colName = cols[colIndex].data;
+
+                            if (colName == cellToUpdate) {
+                               
+                                table.cell({ row: rowToUpdate.index(), column: colIndex }).data(cellValueToUpdate);
+                                $(this)[0].innerText = cellValueToUpdate;
+                                $(this)[0].innerHTML = cellValueToUpdate;
+
+                                setTimeout(function() {
+                                    table.cell({ row: rowToUpdate.index(), column: colIndex }).invalidate().draw();
+                                }, 100);
+                            }
+                        });
+
+                        return false;
+                    }
+                });
+            }
+        }
+        
+        var addRow = function(response) {
+                
+            if (response != undefined && response.returnStatus == 'OK' && response.id != undefined) {
+                    empObj.Id = response.id;
+                    var table = $('#tblEmployee').DataTable();
+                table.row.add({
+                    Address: empObj.Address,
+                    ContactNo:empObj.ContactNo,
+                    DepartmentId:empObj.departmentID,
+                    Dob:empObj.Dob,
+                    Email:empObj.Email,
+                    HiredOn :empObj.HiredOn,
+                    Id:empObj.Id,
+                    Name:empObj.Name,
+                    Position:empObj.Position
+                }).draw(false);
+                     
+                                
+            }
+        }
+    </Script>
+}
+<div class="row">
+     <div  class="row widget-body" style="width:100%;">
+                <div id="divDepartments" style="display: none;width: 45%;float: left;">
+                    <div class="widget-body no-padding">
+                        <div style="margin:5px;margin-left: 2%;">
+                            <select class="form-control" id="ddlDepartments" style="width:95%;">
+                                <option style="color:dimgrey;" value="">Select department</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+     <div id="divTblEmployees"  class="row widget-body" style="width:100%; display:none;">
+    <table id="tblEmployee" class="table table-striped table-bordered" width="100%" style="table-layout: fixed; margin-top:0px !important;">
+    <tbody>
+    </tbody>
+</table>
+</div>
+</div>
+
+
